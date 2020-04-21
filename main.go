@@ -29,7 +29,7 @@ var md5sum bool
 
 func main() {
 
-	flag.BoolVar(&md5sum, "md5sum", false, "计算和生成md5sum文件")
+	flag.BoolVar(&md5sum, "md5sum", false, "为当前目录及子目录下所有文件生成md5sum")
 	flag.StringVar(&ipaths, "ipaths", "", "额外的--proty_path或-I路径,多值用逗号(,)分隔")
 	flag.StringVar(&parent, "parent", "", "api父目录路径")
 	flag.BoolVar(&update, "update", false, "更新所有工具套件")
@@ -108,16 +108,14 @@ func genmd5sum(path string) error {
 - protoc-gen-api.exe
 - github.com/obase/api/x.proto
 */
-var PROXY_SERVER = kits.Getenv("PROXY_SERVER", "http://obase.github.io")
+var PROXY_SERVER = kits.Getenv("PROXY_SERVER", "https://obase.github.io")
 
-const PATTERN_RESOURCE = "/apigen/%s/%s"
+const PATTERN_RESOURCE = "/pbapigen/%s/%s"
 
 var resources = []string{
 	"protoc",
-	"protoc-gen-api",
+	"protoc-gen-pbapi",
 	"version",
-	"github.com/obase/api/x.proto",
-	"google/protobuf/descriptor.proto",
 }
 
 func updatemd(metadir string) {
@@ -264,17 +262,17 @@ func command(metadir string, apidir string, ipaths string) (cmd string, args []s
 	cmd = buf.String()
 
 	buf.Reset()
-	buf.WriteString("--plugin=protoc-gen-api=")
+	buf.WriteString("--plugin=protoc-gen-pbapi=")
 	buf.WriteString(metadir)
 	buf.WriteRune(os.PathSeparator)
-	buf.WriteString("protoc-gen-api")
+	buf.WriteString("protoc-gen-pbapi")
 	if runtime.GOOS == "windows" {
 		buf.WriteString(".exe")
 	}
 	args = append(args, buf.String())
 
 	buf.Reset()
-	buf.WriteString("--api_out=plugins=grpc+apix:")
+	buf.WriteString("--pbapi_out=plugins=grpc:.")
 	buf.WriteString(apidir)
 	args = append(args, buf.String())
 
