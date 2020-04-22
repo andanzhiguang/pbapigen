@@ -272,7 +272,7 @@ func command(metadir string, apidir string, ipaths string) (cmd string, args []s
 	args = append(args, buf.String())
 
 	buf.Reset()
-	buf.WriteString("--pbapi_out=plugins=grpc:.")
+	buf.WriteString("--pbapi_out=plugins=grpc:")
 	buf.WriteString(apidir)
 	args = append(args, buf.String())
 
