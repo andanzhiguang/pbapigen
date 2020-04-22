@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"bytes"
 	"crypto/md5"
 	"encoding/hex"
 	"flag"
@@ -215,32 +214,30 @@ func download(url string, path string) {
 创建proto文件
 <metadir>/protoc --plugin=protoc-gen-go=<metadir>/proto-gen-go --go_out=plugins=grpc+apix:. --proto_path=<metadir> --proto_path=api xxx.proto yyy.proto
 */
-func generate(metadir string, parent string, ipaths string) {
+func generate(metadir string, cwd string, ipaths string) {
+
 	apidir := filepath.Join(parent, "api")
 	kits.Infof("path: %v, scanning......", apidir)
 	if !kits.IsDir(apidir) {
 		return
 	}
+	cmdbase := filepath.Join(metadir, "protoc")
+	argbase := "--plugin=protoc-gen-pbapi=" + filepath.Join(metadir, "protoc-gen-pbapi")
+	if runtime.GOOS == "windows" {
+		cmdbase += ".exe"
+		argbase += ".exe"
+	}
+	protopath := strings.Split(ipaths, ",")
 	// 生成命令行及参数
-	cmdname, cmdargs, protoidx := command(metadir, apidir, ipaths)
 	filepath.Walk(apidir, func(path string, info os.FileInfo, err error) error {
 		if !info.IsDir() && strings.HasSuffix(info.Name(), ".proto") {
-			if relpath, err := filepath.Rel(apidir, path); err == nil {
-				// 1. 删除旧的go文件
-				gofile := path[:len(path)-6] + ".pb.go"
-				if kits.IsExist(gofile) {
-					_ = os.Remove(gofile)
-				}
-				// 2. 创建新的go文件
-				proto := strings.ReplaceAll(relpath, "\\", "/")
-				kits.Infof("file: %v, generating......", proto)
-				cmdargs[protoidx] = proto
-				cmd := exec.Command(cmdname, cmdargs...)
-				cmd.Stdout = os.Stdout
-				cmd.Stderr = os.Stderr
-				if err := cmd.Run(); err != nil {
-					kits.Errorf("generate failed: %v, err=%v", proto, err)
-				}
+			relpath, _ := filepath.Rel(apidir, path)
+			kits.Infof("file: %v, generating......", relpath)
+			cmd := exec.Command(cmdbase, cmdargs(argbase, path, protopath)...)
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			if err := cmd.Run(); err != nil {
+				kits.Errorf("file: %v, generated failed: %v", relpath, err)
 			}
 		}
 		return nil
@@ -248,55 +245,19 @@ func generate(metadir string, parent string, ipaths string) {
 
 }
 
-// <metadir>/protoc --plugin=protoc-gen-go=<metadir>/proto-gen-go --go_out=plugins=grpc+apix:<apidir> --proto_path=<metadir> --proto_path=<apidir> xxx.proto yyy.proto
-func command(metadir string, apidir string, ipaths string) (cmd string, args []string, last int) {
-	args = make([]string, 0, 5)
+func cmdargs(argbase, path string, protopath []string) (ret []string) {
 
-	// 一次性分配
-	buf := bytes.NewBuffer(make([]byte, 256))
+	dir := filepath.Dir(path)
+	base := filepath.Base(path)
 
-	buf.Reset()
-	buf.WriteString(metadir)
-	buf.WriteRune(os.PathSeparator)
-	buf.WriteString("protoc")
-	cmd = buf.String()
-
-	buf.Reset()
-	buf.WriteString("--plugin=protoc-gen-pbapi=")
-	buf.WriteString(metadir)
-	buf.WriteRune(os.PathSeparator)
-	buf.WriteString("protoc-gen-pbapi")
-	if runtime.GOOS == "windows" {
-		buf.WriteString(".exe")
+	ret = append(ret, argbase)
+	ret = append(ret, "--pbapi_out=plugins=grpc:"+dir)
+	ret = append(ret, "--proto_path="+dir)
+	for _, p := range protopath {
+		ret = append(ret, "--proto_path="+p)
 	}
-	args = append(args, buf.String())
+	ret = append(ret, base)
 
-	buf.Reset()
-	buf.WriteString("--pbapi_out=plugins=grpc:")
-	buf.WriteString(apidir)
-	args = append(args, buf.String())
-
-	if ipaths != "" {
-		for _, ipath := range strings.Split(ipaths, ",") {
-			buf.Reset()
-			buf.WriteString("--proto_path=")
-			buf.WriteString(ipath)
-			args = append(args, buf.String())
-		}
-	}
-
-	buf.Reset()
-	buf.WriteString("--proto_path=")
-	buf.WriteString(metadir)
-	args = append(args, buf.String())
-
-	buf.Reset()
-	buf.WriteString("--proto_path=")
-	buf.WriteString(apidir)
-	args = append(args, buf.String())
-	last = len(args)
-	// 扩展最后一个元素，否则会抛下标越界错误
-	args = append(args, "")
 	return
 }
 
