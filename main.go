@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -239,6 +240,9 @@ func generate(metadir string, cwd string, ipaths string) {
 			if err := cmd.Run(); err != nil {
 				kits.Errorf("file: %v, generated failed: %v", relpath, err)
 			}
+
+			// 扫描pb.go里面的message.fields,自动为其添加附加的tags
+			injectCustomTags(path)
 		}
 		return nil
 	})
@@ -273,4 +277,30 @@ func printversion(metadir string, out io.Writer) {
 	defer file.Close()
 	io.Copy(out, file)
 	fmt.Fprintln(out)
+}
+
+func injectCustomTags(p string) {
+	// 根据protoc-gen-go的命名规则
+	prefix := p
+	if ext := path.Ext(prefix); ext == ".proto" || ext == ".protodevel" {
+		prefix = prefix[:len(prefix)-len(ext)]
+	}
+	// 获取pb.go文件
+	pbpath := prefix + ".pb.go"
+	if !kits.Exist(pbpath) {
+		kits.Errorf("inject custom tags failed: %v", pbpath)
+		return
+	}
+	data, err := ioutil.ReadFile(pbpath)
+	if err != nil {
+		kits.Errorf("inject custom tags error: %v, %+v", pbpath, err)
+		return
+	}
+
+	//data = kits.CloneJsonTags(data, "bson")
+	data = kits.FilterJsonOmitempty(data)
+	err = ioutil.WriteFile(pbpath, data, 0644)
+	if err != nil {
+		kits.Errorf("inject custom tags error: %v, %+v", pbpath, err)
+	}
 }
